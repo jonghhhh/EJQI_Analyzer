@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EJQI Analyzer — 경제 뉴스 품질 진단 & 데스크 챗봇</title>
+<meta name="description" content="경제 뉴스 품질 평가 지수(EJQI) 자동 분석기와 경제 뉴스 데스크 챗봇(ENDC). 네이버 경제 섹션 기사 30,178건을 같은 방식으로 채점해 만든 비교 기준표 위에서 작동함.">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="wrap" style="padding-bottom:0">
+    <h1>📰 EJQI Analyzer</h1>
+    <p><b>경제 뉴스 기사 1건의 품질을 12개 항목으로 진단하는 도구</b>.
+       실제 경제 기사 <b>30,178건</b>(2024.07~2026.06)을 같은 방식으로 채점해 만든
+       <b>비교 기준표</b> 위에서 작동함.</p>
+    <div class="pills">
+      <span class="pill">4개 차원 · 12개 항목</span>
+      <span class="pill">총점 없음 · 3단계로 보여줌</span>
+      <span class="pill">점수마다 근거 문장 제시</span>
+      <span class="pill">전문가 인터뷰 11명 근거</span>
+      <span class="pill">API 키는 내 브라우저에만 남음</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+<div class="cols">
+
+<!-- ══════════ 사이드바 ══════════ -->
+<aside class="side">
+  <div class="card">
+    <h3>🔑 1단계 — Gemini API 키 넣기</h3>
+    <input type="password" id="apikey" placeholder="AIza…" autocomplete="off" spellcheck="false">
+    <div style="display:flex; gap:6px; margin-top:8px;">
+      <button class="ghost" id="btnPing" style="flex:1">키 확인</button>
+      <button class="ghost" id="btnClearKey">지우기</button>
+    </div>
+    <div id="keyState" class="note info" style="margin-bottom:0">
+      키를 넣어야 분석과 대화 시작 가능.
+    </div>
+
+    <details>
+      <summary>🔎 API 키 받는 법 (무료·2분)</summary>
+      <ol style="padding-left:18px; margin:6px 0; font-size:13.5px;">
+        <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">
+            Google AI Studio 키 발급 페이지</a> 접속<br>
+            <code class="small">https://aistudio.google.com/app/apikey</code></li>
+        <li>구글 계정으로 로그인</li>
+        <li><b>Create API key</b>(API 키 만들기) 클릭</li>
+        <li>프로젝트를 고르라고 하면 아무 것이나 선택하거나 새로 생성</li>
+        <li>만들어진 <code>AIza…</code> 문자열을 복사해 위 칸에 붙여넣기</li>
+      </ol>
+      <p class="small muted" style="margin:6px 0 0">
+        · 무료 등급으로 사용 가능. 분당 요청 수 제한 있음<br>
+        · 기사 1건 분석 비용은 <b>약 0.0015달러(2원)</b> 수준<br>
+        · 이 페이지에는 <b>서버가 없음</b>. 내 브라우저가 구글 서버를 직접 부르므로
+          키가 제3자에게 가지 않음<br>
+        · 공용 PC에서는 사용 후 <b>지우기</b> 클릭 권장
+      </p>
+    </details>
+  </div>
+
+  <div class="card">
+    <h3>⚙️ 실행 정보</h3>
+    <p class="small muted" style="margin:0">
+      모델 <code id="modelName">gemini-3.1-flash-lite</code> (버전 고정)<br>
+      temperature 0 · 기사 1건당 1회 호출<br>
+      용어 분석 창 앞 1,200자<br>
+      비교 기준표 <b>30,178건</b> · 비교군 <span id="nCells">–</span>개
+    </p>
+    <div id="usageBox" style="display:none; margin-top:10px;">
+      <h3 style="margin-bottom:6px">📊 이번 세션 사용량</h3>
+      <p class="small muted" style="margin:0">
+        호출 <b id="uCalls">0</b>회 · 추정 비용 <b id="uCost">$0.0000</b><br>
+        입력 <span id="uIn">0</span> · 출력 <span id="uOut">0</span> 토큰
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="small muted" style="margin:0">
+      한국언론진흥재단 연구과제<br>
+      「경제 뉴스 보도 현황과 전문성 향상 방안: LLM 기반 품질 평가 지수(EJQI) 개발과
+      AI 데스크 챗봇 설계」
+    </p>
+  </div>
+</aside>
+
+<!-- ══════════ 본문 ══════════ -->
+<main>
+<div class="tabs">
+  <button class="tab on" data-tab="intro">📖 안내 — 처음이면 여기부터</button>
+  <button class="tab" data-tab="ana">🔬 기사 품질 분석</button>
+  <button class="tab" data-tab="chat">💬 데스크 챗봇 (ENDC)</button>
+</div>
+
+<!-- ── 탭 1. 안내 ─────────────────────────────────── -->
+<section class="panel on" id="p-intro">
+
+  <div class="card">
+    <h3>1. 한눈에 보기</h3>
+    <ul>
+      <li><b>무엇인가</b> — 경제 기사 1건을 붙여넣으면 12개 항목으로 채점하고,
+          <b>왜 그 점수인지 기사 속 문장을 근거로 제시</b>하는 도구.</li>
+      <li><b>두 가지 기능</b>
+        <ul>
+          <li>🔬 <b>기사 품질 분석</b> — 항목별 등급 + 근거 문장 + 비슷한 기사들 사이에서의 위치</li>
+          <li>💬 <b>데스크 챗봇(ENDC)</b> — 초고를 놓고 "무엇을 어떻게 고칠지" 대화로 상담</li>
+        </ul>
+      </li>
+      <li><b>누가 쓰나</b> — 출고 전 자기 점검(기자) · 초고 검토(데스크) ·
+          저널리즘 교육·연수 · 매체별·주제별 품질 모니터링(연구자).</li>
+      <li><b>무엇이 근거인가</b> — ① 선행 연구 → ② 경제 저널리스트·시장 전문가
+          <b>11명 심층 인터뷰</b> → ③ <b>파일럿 300건</b> 실측 검증 →
+          ④ <b>본 측정 30,178건</b>의 순서로 만들어진 기준.</li>
+      <li>이론적으로 그럴듯해도 실제 측정에서 기사를 갈라내지 못하면 폐기함.
+          텍스트 가독성 공식(만점 비율 72.7%), 질의응답식 이해도 측정,
+          기사 구성 항목이 그렇게 탈락함.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>2. 3분 사용법</h3>
+    <div class="row c2">
+      <div>
+        <h4>🔬 기사 품질 분석</h4>
+        <ol style="padding-left:19px">
+          <li>왼쪽에 <b>Gemini API 키</b> 입력 (무료 발급, 사이드바 안내 참고)</li>
+          <li>위쪽 <b>기사 품질 분석</b> 탭 클릭</li>
+          <li><b>기사 본문</b> 붙여넣기 (400자 이상 권장)</li>
+          <li>제목·부제·언론사·분야는 넣어도 되고 안 넣어도 됨
+            <ul>
+              <li><b>제목</b>은 본문 칸이 아니라 제목 칸에 따로 넣을 것 —
+                  제목 과장 점검이 정확해짐</li>
+              <li><b>장르</b>(시황·스트레이트·분석해설·기획탐사·논평)는 자동 판정됨</li>
+            </ul>
+          </li>
+          <li><b>분석 시작</b> 클릭 → <b>약 5~15초</b> 소요</li>
+          <li>결과는 <b>3단계</b>로 나옴 (아래 4번 항목 설명 참고)</li>
+          <li>맨 아래에서 취재원·전문용어·막히는 문장 확인 후 리포트 내려받기</li>
+        </ol>
+        <p class="small muted">💡 개별 기사의 점수를 확정적으로 쓰려면 <b>반복 채점 3회 이상</b> 권장.
+           같은 기사를 다시 채점했을 때 항목 점수가 그대로 나올 확률은 약 50%임.</p>
+      </div>
+      <div>
+        <h4>💬 데스크 챗봇 (ENDC)</h4>
+        <ol style="padding-left:19px">
+          <li>왼쪽에 <b>Gemini API 키</b> 입력</li>
+          <li>위쪽 <b>데스크 챗봇</b> 탭 클릭</li>
+          <li>왼쪽 칸에 <b>기사 초고</b> 붙여넣기 (선택 사항)
+            <ul><li>분석을 먼저 돌렸다면 <b>분석 결과 함께 전달</b> 체크 권장 —
+                    답변이 훨씬 구체적으로 나옴</li></ul>
+          </li>
+          <li>질문을 직접 쓰거나 <b>빠른 질문</b> 버튼 클릭
+            <ul><li>예: "이 기사에서 가장 먼저 고칠 것은?", "취재원을 어떻게 보강할까?"</li></ul>
+          </li>
+          <li>챗봇이 근거로 삼는 자료
+            <ul>
+              <li>EJQI 12개 항목의 정의와 채점 기준</li>
+              <li>전문가 <b>인터뷰 11명의 원문 발언</b></li>
+              <li>기사 <b>30,178건 실제 측정 결과</b></li>
+            </ul>
+          </li>
+        </ol>
+        <p class="small muted">💡 챗봇은 "이렇게 써야 한다"고 강요하지 않음.
+           <b>기자가 의도한 선택일 수 있음</b>을 전제로 선택지를 제시함.
+           전문가들이 경고한 '기사 획일화 위험'을 반영한 설계임.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>3. 무엇을 채점하는가 — 4개 차원 12개 항목</h3>
+    <ul>
+      <li>항목마다 <b>눈으로 확인 가능한 조건</b>이 정해져 있음. "느낌"으로 주는 점수가 아님.</li>
+      <li>모든 점수에 <b>기사 본문 인용</b>이 따라붙고, 그 인용이 실제 본문에 있는지 코드가 대조함.
+          (30,178건 측정 기준, 없는 문장을 지어낸 비율 <b>0.30%</b>)</li>
+    </ul>
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>차원</th><th>코드</th><th>항목</th><th>점수</th><th>방향</th><th>무엇을 보는가</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="4" class="dimA"><b>A 분석 깊이</b></td><td>A1</td><td>수치 맥락화</td><td>0–5</td><td>높을수록 좋음</td><td>핵심 수치에 비교 기준선(전년 동기 수치·컨센서스·과거 시계열·경쟁 기업)과 시점·출처가 붙는가</td></tr>
+        <tr><td>A2</td><td>인과·불확실성</td><td>0–5</td><td>높을수록 좋음</td><td>원인 설명의 작동 원리가 있는가. 확인된 사실과 앞으로의 전망이 구분되는가</td></tr>
+        <tr><td>A3</td><td>검증·반론</td><td>0–5</td><td>높을수록 좋음</td><td>발표·보도자료를 그대로 옮기지 않고 따로 확인하거나 반대 근거를 담는가</td></tr>
+        <tr><td>A4</td><td>영향 범위</td><td>0–5</td><td>높을수록 좋음</td><td>누가 영향을 받는지 열거되고 언제까지의 이야기인지(단기/중장기) 밝히는가</td></tr>
+        <tr><td class="dimB"><b>B 취재원·투명성</b></td><td>B3</td><td>이해관계 공시</td><td>0–5</td><td>높을수록 좋음</td><td>말한 사람이 어느 편에 서 있는지 독자가 알 수 있는가 (해당 종목 보유 증권사, 규제 대상 업계 단체 등)</td></tr>
+        <tr><td rowspan="5" class="dimC"><b>C 이해 가능성</b></td><td>C1</td><td>이해 난이도</td><td>0–5</td><td><b>⚠ 높을수록 쉬움</b><br>(품질 아님)</td><td>경제 지식이 거의 없는 성인이 이 기사만 읽고 이해 가능한가. 내용이 단순해서(행사 안내·인사) 쉬운 경우도 5점</td></tr>
+        <tr><td>C2</td><td>설명 노력</td><td>0–5</td><td>높을수록 좋음</td><td>어려운 내용이 실제로 있는데도 비전문가가 따라갈 수 있게 풀어 썼는가</td></tr>
+        <tr><td>C3</td><td>용어 해설률</td><td>0–100%</td><td>높을수록 좋음</td><td>전문용어를 얼마나 풀어 줬는가 (없음 0 · 사전적 0.5 · 맥락번역 0.85 · 중요성설명 1.0으로 가중 평균)</td></tr>
+        <tr><td>C4</td><td>수치 체감화</td><td>0–5</td><td>높을수록 좋음</td><td>핵심 수치를 독자가 체감할 단위로 바꿔 주는가 (내 부담액·1인당·월 단위)</td></tr>
+        <tr><td>C5</td><td>사례·비유</td><td>0–5</td><td>높을수록 좋음</td><td>사례·비유·현장 목소리로 추상적인 지표를 구체화하는가</td></tr>
+        <tr><td rowspan="2" class="dimD"><b>D 맥락 충실성</b></td><td>D1</td><td>배경·시계열</td><td>0–5</td><td>높을수록 좋음</td><td>앞선 사정, 장기 흐름, 되풀이되는 경기 사이클 속 위치가 제시되는가</td></tr>
+        <tr><td>D2</td><td>독자 함의</td><td>0–5</td><td>높을수록 좋음</td><td>이 정보가 왜 중요한지, 독자의 삶·자산·판단에 어떤 의미인지 설명되는가</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="note info" style="margin-top:12px">
+      <b>💡 점수 매기는 방식 — '앵커'</b>
+      <ul style="margin:6px 0 0; padding-left:18px">
+        <li><b>앵커</b> = 몇 점을 주려면 무엇이 보여야 하는지 미리 못 박아 둔 기준선.</li>
+        <li>예) A1 수치 맥락화 — 저축은행 연체율 기사의 경우
+          <ul>
+            <li><b>0점</b> "연체율 5.14%" (숫자만 있음)</li>
+            <li><b>2점</b> "지난해 말 대비 오른 5.14%" (시점만 붙음)</li>
+            <li><b>4점</b> 여기에 "전년 동기 3.02%" 같은 비교 기준선이 붙음</li>
+            <li><b>5점</b> 다시 "상호금융 0.15%·은행 0.64%와 견줘 업권 최고" 해석까지 붙음</li>
+          </ul>
+        </li>
+        <li><b>0~5점을 다 쓰지는 않음.</b> A1~A4는 0·2·4·5점만, B3·C2·C4·C5·D1·D2는 0·3·5점만, C1은 0·2·3·4·5점만 정의됨.
+            채점자가 확신을 갖고 구별 가능한 단계만 남긴 것으로,
+            <b>사실상 3~4단계짜리 순서 척도</b>임. 결과도 그렇게 읽어야 함.</li>
+        <li>C3 용어 해설률만 채점이 아니라 <b>계산 결과</b>임. 모델은 용어를 뽑고 설명 수준만 판정하고,
+            비율 계산은 코드가 수행함(같은 목록이면 몇 번을 돌려도 같은 값).<br>
+            예) 용어 4개가 '없음·없음·사전적·맥락번역'이면
+            (0+0+0.5+0.85) ÷ 4 = <b>33.75%</b></li>
+      </ul>
+    </div>
+
+    <h4>함께 나오는 부가 정보 (점수 아님)</h4>
+    <ul>
+      <li><b>표시만 하는 점검 3종</b> — 제목 과장·왜곡 / 낙관·비관 균형(0–5) / 홍보·광고성 + 홍보 유형 9분류.
+          점수에 합산되지 않고 깃발만 세움.</li>
+      <li><b>뽑아 주는 자료 3종</b>
+        <ul>
+          <li><b>취재원 목록</b> — 16개 유형으로 분류. 증권사·셀사이드와 자산운용·바이사이드를
+              따로 나눈 것은 전문가들이 지적한 '셀사이드 편중'을 확인하기 위함임</li>
+          <li><b>전문용어 목록</b> — 용어별 설명 수준 4단계 판정</li>
+          <li><b>비전문가가 막히는 문장</b> — 6개 유형으로 지목</li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>4. 결과 읽는 법 — 3단계</h3>
+
+    <h4>1단계 · 항목별 진단 카드 <span class="muted">(가장 중요한 산출물)</span></h4>
+    <ul>
+      <li>항목마다 <b>등급 + 근거 문장 + 판정 이유</b>가 나옴.</li>
+      <li>등급 표기 — ● 충족 / ◐ 대체로 충족 / ○ 부분 충족 / ✗ 미충족.</li>
+      <li>점수 자체보다 <b>"어느 문장이 왜 문제인가"</b>를 보는 것이 이 도구의 사용법임.
+          전문가 인터뷰에서 요구된 형태임 — "점수보다 근거가 중요합니다.
+          어느 문장이 왜 감점인지 제시하고"(I08).</li>
+    </ul>
+
+    <h4>2단계 · 비슷한 기사들 사이에서의 위치 <span class="muted">(백분위)</span></h4>
+    <ul>
+      <li><b>백분위</b> = 100건 중 몇 번째로 좋은가. <b>P70</b>이면 비슷한 기사 100건 중
+          상위 30번째쯤이라는 뜻.</li>
+      <li>왜 절대 점수보다 위치인가 — <b>기사가 길수록 점수가 오르는 효과</b>가
+          매체 유형 차이보다 4배 컸음. 짧은 시황 기사와 긴 기획 기사를 같은 자로 재면 불공평함.</li>
+      <li>그래서 <b>장르 × 길이대</b>로 나눈 16개 비교군 중 내 기사와 같은 칸 안에서 순위를 매김.
+          (길이대: S 800자 미만 / M 800~2,000자 / L 2,000자 이상)</li>
+    </ul>
+
+    <h4>3단계 · 가중치를 바꿔도 흔들리지 않는 순위 범위</h4>
+    <ul>
+      <li><b>왜 필요한가</b> — 네 차원 중 무엇을 더 중요하게 볼지는 사람마다 다름.
+          분석 깊이를 중시하는 데스크와 이해 가능성을 중시하는 독자의 결론이 달라질 수 있음.</li>
+      <li><b>무엇을 하는가</b> — 차원별 비중 배분을 <b>1,000가지로 바꿔 가며</b>
+          순위를 매번 다시 계산함.</li>
+      <li><b>단 하나 고정하는 규칙</b> — 분석 깊이(A) ≥ 이해 가능성(C) ≥ 맥락 충실성(D) ≥
+          취재원·투명성(B)의 <b>순서</b>. 전문가 인터뷰에서 합의된 것은 이 순서뿐이고,
+          "A는 몇 %, C는 몇 %" 같은 비율은 근거가 없기 때문임.</li>
+      <li><b>결과 읽는 법</b> — 나오는 "P○ ~ P○"는
+          <b>어떤 비중을 쓰더라도 이 기사의 순위가 대체로 이 범위 안</b>이라는 뜻.
+        <ul>
+          <li>범위가 <b>좁으면</b> → 누가 어떤 관점으로 봐도 평가가 비슷한 기사</li>
+          <li>범위가 <b>넓으면</b> → 보는 관점에 따라 평가가 갈리는 기사 (사람 판단이 더 필요)</li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>5. 꼭 알아 둘 세 가지</h3>
+    <ul>
+      <li><b>① 총점(단일 종합점수)이 없음.</b> 12개 항목을 평균하지 않음.
+          30,178건 분석에서 <b>이해관계 공시(B3)</b>와 <b>이해 난이도(C1)</b>가
+          나머지 항목과 따로 놀았기 때문임. 두 항목을 평균에 넣으면
+          <b>홍보성 단신의 점수가 오히려 부풀려짐.</b></li>
+      <li><b>② 이해 난이도(C1)는 품질 점수가 아님.</b> 높을수록 '쉽다'는 뜻일 뿐임.
+          실제 측정에서 <b>설명할 내용 자체가 없는 기사가 가장 쉬웠음</b>(4.94/5).
+          설명 노력(C2)과는 반대 방향으로 움직임(상관 −0.28). 두 값을 나란히 읽을 것.</li>
+      <li><b>③ 점수 하나에 매달리지 말 것.</b> 같은 기사를 다시 채점하면 항목 점수가
+          그대로 나올 확률이 약 50%임. 매체·분야·시기를 통째로 비교할 때는 1회 측정으로 충분하지만,
+          <b>기사 1건의 점수를 확정적으로 쓰려면 반복 채점(3회 이상)</b>이 필요함.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>6. 처음 보는 말 풀이</h3>
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:150px">용어</th><th>쉬운 설명</th></tr></thead>
+      <tbody>
+        <tr><td><b>앵커</b></td><td>몇 점을 주려면 기사에 무엇이 보여야 하는지 미리 정해 둔 기준선. "이런 게 보이면 4점" 식의 채점 규칙</td></tr>
+        <tr><td><b>비교 기준표<br>(규준)</b></td><td>실제 경제 기사 30,178건을 이 도구와 똑같은 방식으로 채점해 만든 성적 분포표. 내 기사가 몇 등쯤인지 재는 자</td></tr>
+        <tr><td><b>비교군</b></td><td>내 기사와 조건이 비슷한 기사 묶음. 장르 5종 × 길이대 3종으로 나눈 16개 칸 중 하나. 표본이 30건 미만이면 더 넓은 칸으로 자동 완화</td></tr>
+        <tr><td><b>백분위 (P○)</b></td><td>비교군 100건 중 몇 번째로 좋은가. P50이면 딱 중간, P90이면 상위 10%</td></tr>
+        <tr><td><b>문단 [P1] [P2]</b></td><td>기자가 나눈 문단이 아님. 수집된 본문에 줄바꿈이 없어, 코드가 <b>문장 3개씩 묶어</b> 만든 약 200자짜리 위치 표시 단위. "기사의 몇 번째 대목인가"를 가리키는 좌표일 뿐이며, 문단 개수를 기사 구성이나 가독성으로 해석하면 안 됨</td></tr>
+        <tr><td><b>분석 창</b></td><td>전문용어를 뽑는 범위. <b>앞 1,200자까지</b>로 고정함. 기사가 길수록 뒷부분 용어가 누락돼 길이가 다른 기사끼리 비교가 안 되는 문제를 막기 위함임<br>⚠ <b>용어 해설률(C3)에만</b> 적용됨. 나머지 11개 항목과 <b>취재원 목록은 기사 전체가 대상</b></td></tr>
+        <tr><td><b>장르</b></td><td>시황 / 스트레이트 / 분석해설 / 기획탐사 / 논평 5종. 모델이 자동 판정하며 비교군을 고르는 데 쓰임</td></tr>
+        <tr><td><b>점검(게이트)</b></td><td>점수화하지 않고 깃발만 세우는 항목. 제목 과장, 낙관·비관 균형, 홍보·광고성 3종</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>7. 이 도구의 한계 — 반드시 읽을 것</h3>
+    <div class="note warn">
+      <b>순위를 매기거나 사람을 평가하는 장치가 아님.</b>
+      <ul style="margin:8px 0 0; padding-left:18px">
+        <li><b>기사 1건의 점수는 확정적이지 않음.</b> 같은 기사를 다시 채점했을 때
+            항목 점수가 그대로 나올 확률이 약 50%임. 매체·분야·시기 단위의 집합 비교에는
+            1회 측정으로 충분하나, <b>개인 평가·인사 고과 연동은 권장하지 않음.</b></li>
+        <li><b>이해 가능성(C) 차원은 아직 타당성이 확립되지 않음.</b>
+            다른 조건을 통제했을 때 뚜렷한 결과가 나온 것은 용어 해설률뿐임.
+            이 차원은 <b>참고용 기술통계로만</b> 읽을 것.</li>
+        <li><b>사람 채점자와의 대조 검증이 아직 수행되지 않음.</b>
+            현재 결과는 "LLM이 채점 규칙을 적용한 결과"임.</li>
+        <li><b>제목 과장 점검은 잘 작동하지 않음.</b> 실제 발생률의 100분의 1 수준만 잡아냄.</li>
+        <li><b>점수가 높다고 좋은 기사인 것은 아님.</b> 통념을 뒤집는 역발상 기사가
+            낮게 나올 수 있음.</li>
+        <li><b>기사 1건의 텍스트만으로 잴 수 없는 것은 아예 넣지 않음</b> —
+            과거 전망의 사후 검증, 자본·권력으로부터의 독립성, 타 매체와의 차별성.
+            중요하지만 측정 층위가 다른 개념들임.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>8. 개인정보와 데이터 처리</h3>
+    <ul>
+      <li>이 페이지에는 <b>서버가 없음.</b> 정적 파일만 배포되며, 계산은 전부
+          이용자의 브라우저 안에서 이루어짐.</li>
+      <li>입력한 <b>API 키와 기사 본문은 어디에도 저장되지 않음.</b>
+          기사 본문은 채점을 위해 <b>Google Gemini API로만</b> 전송됨.</li>
+      <li>키는 이용자가 직접 체크한 경우에만 브라우저 로컬 저장소에 남음. 기본값은 저장 안 함.</li>
+      <li>탭을 닫으면 입력 내용이 모두 사라짐.</li>
+      <li>외부 추적 스크립트·분석 도구·CDN을 일절 쓰지 않음.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ── 탭 2. 품질 분석 ────────────────────────────── -->
+<section class="panel" id="p-ana">
+  <div class="card">
+    <h3>🔬 기사 품질 분석</h3>
+    <p class="muted" style="margin-top:-4px">기사 1건을 12개 항목으로 채점하고 3단계로 보여 줌.
+       모든 점수에 본문 인용이 따라붙으며, 그 인용이 실제 본문에 있는지 코드가 대조함.</p>
+
+    <div class="row c4">
+      <div><label for="fTitle">제목</label><input type="text" id="fTitle" placeholder="기사 제목 (선택)"></div>
+      <div><label for="fPress">언론사</label><input type="text" id="fPress" placeholder="예: 한국경제 (선택)"></div>
+      <div><label for="fTopic">분야</label><select id="fTopic"></select></div>
+      <div><label for="fRepeat">반복 채점</label><select id="fRepeat">
+        <option value="1">1회 (기본)</option><option value="3">3회 평균</option><option value="5">5회 평균</option>
+      </select></div>
+    </div>
+    <div class="row"><div><label for="fSub">부제</label>
+      <input type="text" id="fSub" placeholder="부제 (선택)"></div></div>
+    <div class="row"><div>
+      <label for="fBody">기사 본문 <b>*</b> <span id="bodyLen" class="muted"></span></label>
+      <textarea id="fBody" rows="11" placeholder="기사 본문을 붙여넣으세요. 400자 이상 권장.
+
+※ 제목·부제는 위 칸에 따로 넣어 주세요. 제목이 본문에 섞이면 제목 과장 점검이 부정확해집니다."></textarea>
+    </div></div>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <button class="btn" id="btnRun">🚀 분석 시작</button>
+      <label style="display:flex; gap:6px; align-items:center; margin:0; font-size:13.5px;">
+        <input type="checkbox" id="cbPreview" style="width:auto"> 문단 나눔·분석 창 미리 보기
+      </label>
+      <span id="runState" class="muted"></span>
+    </div>
+    <p class="small muted" style="margin:8px 0 0">
+      반복 채점은 기사 1건의 점수를 확정적으로 쓸 때만 필요함(1회 채점의 재현율 약 50%).
+      반복 시 temperature 0.7이 적용되고 호출 비용이 배로 늘어남.
+    </p>
+  </div>
+
+  <div id="previewBox"></div>
+  <div id="anaMsg"></div>
+  <div id="anaResult"></div>
+</section>
+
+<!-- ── 탭 3. ENDC ─────────────────────────────────── -->
+<section class="panel" id="p-chat">
+  <div class="card">
+    <h3>💬 경제 뉴스 데스크 챗봇 (ENDC)</h3>
+    <p class="muted" style="margin-top:-4px">EJQI 12개 항목의 채점 기준, 전문가 인터뷰 11명의
+       원문 발언, 기사 30,178건 측정 결과를 근거로 조언함. 규범을 강요하지 않고 선택지를 제시함.</p>
+  </div>
+
+  <div class="cols" style="grid-template-columns: 1fr 1.5fr;">
+    <div>
+      <div class="card">
+        <h3>📝 검토 대상 (선택)</h3>
+        <textarea id="cDraft" rows="11" placeholder="초고를 붙여넣으면 그 기사를 놓고 대화 — 문장을 직접 인용해 답함.
+비워 두어도 됨. EJQI 기준이나 경제 저널리즘 일반에 대한 질문도 가능."></textarea>
+        <label style="display:flex; gap:6px; align-items:center; margin:9px 0 0; font-size:13.5px;">
+          <input type="checkbox" id="cbAttach" style="width:auto" disabled>
+          🔬 분석 결과 함께 전달
+        </label>
+        <p class="small muted" id="attachHint" style="margin:4px 0 0">
+          ※ <b>기사 품질 분석</b> 탭에서 먼저 분석하면 켤 수 있음.
+        </p>
+      </div>
+      <div class="card">
+        <h3>⚡ 빠른 질문</h3>
+        <div class="quick" id="quickBox"></div>
+        <button class="ghost" id="btnClearChat" style="width:100%; margin-top:9px">🗑 대화 비우기</button>
+      </div>
+    </div>
+    <div>
+      <div class="chatbox" id="chatBox"></div>
+      <div style="display:flex; gap:8px; margin-top:9px;">
+        <input type="text" id="chatInput" placeholder="무엇을 도와드릴까요? (예: 이 기사에서 가장 약한 부분은?)">
+        <button class="btn" id="btnSend">보내기</button>
+      </div>
+      <div id="chatMsg"></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  EJQI Analyzer · 경제 뉴스 품질 평가 지수 v3 ·
+  비교 기준표 30,178건(2024.07~2026.06) · 모델 <code>gemini-3.1-flash-lite</code><br>
+  <b>총점(단일 종합점수)을 산출하지 않음.</b>
+  점수가 높다고 좋은 기사인 것은 아니며, 개인 평가 용도로는 권장하지 않음.
+</footer>
+
+</main>
+</div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
