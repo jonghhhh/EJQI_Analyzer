@@ -11,6 +11,10 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
 
 const state = { norms: null, result: null, chat: [], busy: false };
 const DIM_CLASS = { A: "dimA", B: "dimB", C: "dimC", D: "dimD" };
+// 코드는 C로 시작하지만 C 차원 평균에는 넣지 않는 단독 지표
+//  · C1 이해 난이도 — '쉬움'을 재는 값이라 품질 합성에 넣으면 방향이 뒤집힌다
+//  · C3 용어 해설률 — 척도가 0~100이라 0–5 항목과 같은 평균에 못 넣는다
+const SOLO_ITEMS = new Set(["difficulty", "term_explanation_rate"]);
 
 // ══════════ 초기화 ══════════
 (async function init() {
@@ -262,22 +266,26 @@ function renderResult(r) {
       ${metric("본문 길이", m.body_len.toLocaleString() + "자", `길이대 ${m.len_bin}`)}
       ${metric("취재원", r.n_sources + "명", `기사 전체 기준 · 실명 ${r.n_sources_named}명`)}
       ${metric("전문용어", r.n_terms + "개", `설명 없이 쓴 것 ${r.n_terms_unexplained}개`)}
-      ${metric("용어 해설률", r.term_explanation_rate === null ? "–" : r.term_explanation_rate + "%",
-               "3만 건 평균 13.5%")}
       ${metric("막히는 문장", r.n_blockers + "개", "비전문가가 걸리는 대목")}
     </div>
+    <h4>4개 차원 <span class="muted small">(소속 항목 평균 · 0–5)</span></h4>
     <div class="metrics">
-      ${metric('<span class="dimA">A 분석 깊이</span>', d.A ?? "–", "3만 건 평균 2.32")}
-      ${metric('<span class="dimC">C 이해 가능성</span>', d.C ?? "–", "3만 건 평균 1.81")}
-      ${metric('<span class="dimD">D 맥락 충실성</span>', d.D ?? "–", "3만 건 평균 1.86")}
-      ${metric('<span class="dimB">B 취재원·투명성</span>', d.B ?? "–", "3만 건 평균 2.83")}
-      ${metric("C1 이해 난이도", r.difficulty, "⚠ 높을수록 쉬움 · 품질 아님")}
-      ${metric("C2 설명 노력", r.effort_na ? "평가 불가" : r.effort,
-               r.effort_na ? "어려운 내용 없음" : "3만 건 평균 1.86")}
+      ${metric('<span class="dimA">A 분석 깊이</span>', d.A ?? "–", "A1~A4 평균 · 3만 건 평균 2.32")}
+      ${metric('<span class="dimC">C 이해 가능성</span>', d.C ?? "–", "C2·C4·C5 평균 · 3만 건 평균 1.81")}
+      ${metric('<span class="dimD">D 맥락 충실성</span>', d.D ?? "–", "D1·D2 평균 · 3만 건 평균 1.86")}
+      ${metric('<span class="dimB">B 취재원·투명성</span>', d.B ?? "–", "B3 단일 항목 · 3만 건 평균 2.83")}
+    </div>
+    <h4>차원 밖 단독 지표 <span class="muted small">(어느 차원 평균에도 넣지 않음)</span></h4>
+    <div class="metrics" style="grid-template-columns:repeat(2,1fr)">
+      ${metric("C1 이해 난이도", r.difficulty, "0–5 · ⚠ 높을수록 쉬움 · 품질 아님")}
+      ${metric("C3 용어 해설률", r.term_explanation_rate === null ? "–" : r.term_explanation_rate + "%",
+               "0–100 · 3만 건 평균 13.5%")}
     </div>
     <p class="small muted">⚠ 위 네 차원 평균을 다시 더해 총점을 만들지 말 것.
-      이해관계 공시(B3)와 이해 난이도(C1)는 나머지 항목과 따로 노는 값이어서,
-      평균에 넣으면 홍보성 단신의 점수가 부풀려짐.</p>
+      <b>C1 이해 난이도</b>와 <b>C3 용어 해설률</b>은 C 차원 평균에 넣지 않고 단독으로 읽음 —
+      C1은 품질이 아니라 ‘쉬움’을 재고, C3는 척도가 0~100이라 나머지 항목과 섞이지 않기 때문임.
+      <b>B3 이해관계 공시</b> 역시 나머지 항목과 따로 노는 값이어서,
+      전체 평균에 넣으면 홍보성 단신의 점수가 부풀려짐.</p>
     ${r.n_repeats > 1 ? `<div class="note info">반복 채점 ${r.n_repeats}회의 평균값임.
       항목별 편차는 아래 <b>채점 원자료</b>에서 확인 가능함.</div>` : ""}
     ${r.effort_na ? `<div class="note info">이 기사는 <b>어려운 내용 자체가 없어
@@ -294,6 +302,7 @@ function renderResult(r) {
     + '어느 문장이 왜 감점인지 제시하고”(I08)</p>');
   for (const [code, key, label, dim] of E.ALL_ITEMS) {
     const v = r[key];
+    const solo = SOLO_ITEMS.has(key);
     const s5 = E.scale5(key, v);
     let [g, mark] = E.grade(s5);
     let note = "";
@@ -311,7 +320,8 @@ function renderResult(r) {
     H.push(`<div class="item">
       <div class="h">
         <span class="code ${DIM_CLASS[dim]}">${mark} ${code}</span>
-        <span class="lbl">${esc(label)}</span>
+        <span class="lbl">${esc(label)}${solo
+          ? ' <i class="muted" style="font-style:normal;font-weight:400">· 차원 밖 단독 지표</i>' : ""}</span>
         <span class="val">${shown}</span>
         <span class="gr ${DIM_CLASS[dim]}">${g}${note}</span>
         <span class="cmp">${cmp}</span>
@@ -332,7 +342,8 @@ function renderResult(r) {
   const gb = [];
   if (!r.headline_overstated) gb.push("제목 과장·왜곡 없음");
   if (!r.promotional) gb.push("홍보·광고성 아님");
-  gb.push(`낙관·비관 균형 ${r.sentiment_balance}/5 (5에 가까울수록 균형)`);
+  gb.push(`낙관·비관 균형 ${r.sentiment_balance}/5 ` +
+    "(5 = 낙관·비관 양쪽이 고르게 실림 · 0에 가까울수록 어느 한쪽으로만 치우침)");
   if (r.promotional_type !== "해당없음") gb.push(`홍보 유형: ${esc(r.promotional_type)}`);
   H.push(`<p class="small muted">${gb.join(" · ")}</p>`);
   if (r.flags?.length) {
@@ -364,37 +375,44 @@ function renderResult(r) {
         <td>${p === null ? "" : `<span class="bar"><i style="left:${Math.min(p, 99)}%"></i></span>`}</td></tr>`);
     }
     H.push(`</tbody></table></div>
-      <p class="small muted">⚠ C1 이해 난이도와 C2 설명 노력은 서로 <b>반대 방향</b>으로 움직이는 값임(상관 −0.28).
+      <p class="small muted">⚠ <b>C1 이해 난이도</b>와 <b>C3 용어 해설률</b>은 위 표에 함께 실리지만
+      <b>C 차원 평균에는 넣지 않는 단독 지표</b>임 (C 차원 = C2·C4·C5).<br>
+      ⚠ C1 이해 난이도와 C2 설명 노력은 서로 <b>반대 방향</b>으로 움직이는 값임(상관 −0.28).
       더하지 말고 나란히 읽을 것. C1이 높은데 C2가 낮으면
       ‘쉬운 기사’가 아니라 ‘설명할 내용이 없는 기사’일 수 있음.</p>`);
   }
   H.push("</div>");
 
   // Layer 3
-  H.push('<div class="card"><h3>🎚 3단계 — 가중치를 바꿔도 흔들리지 않는 순위 범위</h3>'
+  H.push('<div class="card"><h3>🎚 3단계 — 가중치를 바꿔도 흔들리지 않는 백분위 범위</h3>'
     + '<p class="small muted" style="margin-top:-4px">'
+    + '<b>2단계와 같은 백분위 P○로 읽음 — 숫자가 클수록 상위임.</b> '
+    + '다른 점은 비교 상대뿐임. 2단계는 장르·길이가 비슷한 기사끼리, 여기는 <b>전체 기사</b>와 견줌.<br>'
     + '네 차원 중 무엇을 더 중요하게 볼지는 사람마다 다름. 그래서 <b>중요도 배분을 1,000가지로 '
-    + '바꿔 가며</b> 순위를 매번 다시 계산함. 고정한 규칙은 순서 하나뿐 — '
+    + '바꿔 가며</b> 백분위를 매번 다시 계산함. 고정한 규칙은 순서 하나뿐 — '
     + '분석 깊이(A) ≥ 이해 가능성(C) ≥ 맥락 충실성(D) ≥ 취재원·투명성(B). '
     + '전문가 인터뷰에서 합의된 것이 이 순서뿐이고 “A는 몇 %” 같은 비율은 근거가 없기 때문임.</p>');
   const p3 = state.norms ? E.weightInterval(r, state.norms) : null;
   if (!p3) H.push('<div class="note warn">차원 점수가 일부 비어 있어 이 단계는 건너뜀.</div>');
   else {
     const width = p3.hi - p3.lo;
+    const nAll = state.norms.cells["전체/전체"]?.n ?? p3.n_pop;
     H.push(`<div class="metrics" style="grid-template-columns:repeat(2,1fr)">
-      ${metric("순위 (평균)", "P" + Math.round(p3.mean), "전체 기사 중 위치")}
-      ${metric("흔들리는 범위", `P${Math.round(p3.lo)} ~ P${Math.round(p3.hi)}`,
+      ${metric("백분위 (평균)", "P" + Math.round(p3.mean), "전체 기사 대비 · 높을수록 상위")}
+      ${metric("흔들리는 폭", `P${Math.round(p3.lo)} ~ P${Math.round(p3.hi)}`,
                width < 10 ? "좁음 — 평가가 잘 안 갈림" : (width < 25 ? "보통" : "넓음 — 관점 따라 갈림"))}
     </div>
     <div class="note info" style="margin-bottom:0">
       <b>읽는 법</b>
       <ul style="margin:6px 0 0; padding-left:18px">
-        <li>이 기사는 전체 ${p3.n_pop.toLocaleString()}건 가운데 대략
-            <b>상위 ${100 - Math.round(p3.mean)}%</b> 위치임.</li>
-        <li>중요도를 어떻게 배분하더라도 순위는
+        <li>이 기사는 전체 ${nAll.toLocaleString()}건 가운데 <b>백분위 P${Math.round(p3.mean)}</b>
+            — 대략 <b>상위 ${100 - Math.round(p3.mean)}%</b> 위치임.
+            ${nAll > p3.n_pop ? `<span class="muted">(계산은 ${nAll.toLocaleString()}건에서
+            무작위로 뽑은 ${p3.n_pop.toLocaleString()}건 표본 기준)</span>` : ""}</li>
+        <li>중요도를 어떻게 배분하더라도 백분위는
             <b>P${Math.round(p3.lo)} ~ P${Math.round(p3.hi)}</b> 안에 머무름
             (${p3.n_draw.toLocaleString()}가지 배분 중 95%).</li>
-        <li>범위가 <b>좁으면</b> 누가 봐도 평가가 비슷한 기사, <b>넓으면</b> 보는 관점에 따라
+        <li>폭이 <b>좁으면</b> 누가 봐도 평가가 비슷한 기사, <b>넓으면</b> 보는 관점에 따라
             평가가 갈리는 기사 → 사람의 판단이 더 필요함.</li>
       </ul>
     </div>`);
@@ -514,7 +532,8 @@ function asText(r) {
     const v = r[key], s5 = E.scale5(key, v);
     let [g, mark] = E.grade(s5);
     if (key === "effort" && r.effort_na) { g = "평가 불가 (어려운 내용 없음 — 감점 아님)"; mark = "–"; }
-    L.push(` ${mark} ${code.padEnd(4)} ${label.padEnd(12)} ${g}`);
+    L.push(` ${mark} ${code.padEnd(4)} ${label.padEnd(12)} ${g}` +
+      (SOLO_ITEMS.has(key) ? "   [차원 밖 단독 지표]" : ""));
     const ev = r._evidence?.[key] || {};
     if (ev.evidence) L.push(`      근거: ${String(ev.evidence).slice(0, 70)}`);
     if (ev.reasoning && s5 !== null && s5 <= 2) L.push(`      결손: ${String(ev.reasoning).slice(0, 66)}`);
@@ -549,16 +568,21 @@ function asText(r) {
       const shown = key === "term_explanation_rate" ? v + "%" : String(v);
       L.push(` ${code.padEnd(4)} ${label.padEnd(12)} ${shown.padStart(5)}  P${String(Math.round(p)).padStart(3)}  |${bar}|`);
     }
-    L.push("", "  ※ C1 이해 난이도와 C2 설명 노력은 반대 방향으로 움직이는 값임(상관 −0.28).",
+    L.push("", "  ※ C1 이해 난이도와 C3 용어 해설률은 C 차원 평균에 넣지 않는 단독 지표임",
+      "     (C 차원 = C2·C4·C5).",
+      "  ※ C1 이해 난이도와 C2 설명 노력은 반대 방향으로 움직이는 값임(상관 −0.28).",
       "     더하지 말고 두 값을 나란히 읽을 것.");
     const p3 = E.weightInterval(r, state.norms);
     if (p3) {
-      L.push("", `[3단계] 가중치를 바꿔도 흔들리지 않는 순위 범위`,
+      const nAll = state.norms.cells["전체/전체"]?.n ?? p3.n_pop;
+      L.push("", `[3단계] 가중치를 바꿔도 흔들리지 않는 백분위 범위`,
+        "           2단계와 같은 백분위 P○ (숫자가 클수록 상위). 비교 상대만 전체 기사로 바뀜",
         `           중요도 배분 ${p3.n_draw.toLocaleString()}가지 (순서만 고정: A≥C≥D≥B)`,
-        `           전체 기사 대비 순위: 평균 P${Math.round(p3.mean)}  ` +
-        `범위 P${Math.round(p3.lo)} ~ P${Math.round(p3.hi)}`,
-        "           → 어떤 중요도 배분을 쓰더라도 순위는 이 범위 안에 머무름.",
-        "           → 범위가 좁으면 평가가 잘 안 갈리는 기사, 넓으면 관점 따라 갈리는 기사.");
+        `           전체 ${nAll.toLocaleString()}건 대비: 평균 P${Math.round(p3.mean)}  ` +
+        `범위 P${Math.round(p3.lo)} ~ P${Math.round(p3.hi)}` +
+        `  (표본 ${p3.n_pop.toLocaleString()}건 기준)`,
+        "           → 어떤 중요도 배분을 쓰더라도 백분위는 이 폭 안에 머무름.",
+        "           → 폭이 좁으면 평가가 잘 안 갈리는 기사, 넓으면 관점 따라 갈리는 기사.");
     }
   }
   L.push("", "-".repeat(74),

@@ -86,7 +86,9 @@ export function buildContext(draft, result, attach) {
     const d = dimScores(result);
     const L = [
       `장르 ${result.genre} · 본문 ${(result.meta?.body_len || 0).toLocaleString()}자`,
-      `차원 평균 — A 분석깊이 ${d.A} / C 이해가능성 ${d.C} / D 맥락충실성 ${d.D} / B 취재원 ${d.B}`,
+      `차원 평균 — A 분석 깊이 ${d.A} / C 이해 가능성 ${d.C} / `
+      + `D 맥락 충실성 ${d.D} / B 취재원·투명성 ${d.B}`,
+      `  ※ C 차원 평균 = C2·C4·C5. C1 이해 난이도와 C3 용어 해설률은 차원 밖 단독 지표임`,
       `C1 이해 난이도 ${result.difficulty} (높을수록 쉬움) · ` +
       `C2 설명 노력 ${result.effort_na ? "평가불가" : result.effort} · ` +
       `C3 용어 해설률 ${result.term_explanation_rate}%`,

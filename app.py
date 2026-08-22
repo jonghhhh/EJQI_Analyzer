@@ -213,7 +213,8 @@ with tab_intro:
 
     st.markdown("""
 - **점검 표시 3종** — 점수에 넣지 않고 표시만 함
-  - `제목 과장·왜곡` · `감성 균형(0–5)` · `홍보·광고성` + 홍보 유형 9분류
+  - `제목 과장·왜곡` · `낙관·비관 균형(0–5)` · `홍보·광고성` + 홍보 유형 9분류
+    (낙관·비관 균형은 5가 양쪽이 고르게 실린 상태, 0에 가까울수록 한쪽으로만 치우침)
 - **목록 산출 3종** — 점수가 아니라 확인용 근거 자료임
   - **취재원** 16분류(증권사·셀사이드 ↔ 자산운용·바이사이드를 분리) ·
     **전문용어**와 해설 수준 · **비전문가가 막히는 문장** 6유형
@@ -237,7 +238,7 @@ with tab_intro:
         st.markdown("""<div class="card">
 <b>③ 점수 자체보다 '비슷한 기사 중 몇 등'</b><br><span class="muted">
 기사가 길수록 점수가 올라가는 효과가 매체 유형 차이보다 <b>4배</b> 컸음. 그래서
-<b>장르 × 길이대</b>로 나눈 16개 비교군 안에서의 순위를 함께 보여 줌.</span></div>""", unsafe_allow_html=True)
+<b>장르 × 길이대</b>로 나눈 16개 비교군 안에서의 백분위를 함께 보여 줌.</span></div>""", unsafe_allow_html=True)
 
     st.markdown("## 4. 사용법")
     cc1, cc2 = st.columns(2)
@@ -254,8 +255,9 @@ with tab_intro:
 6. 결과는 세 단계로 나옴
    - **1단계 항목별 진단 카드** — 항목별 등급과 **근거 문장**. 가장 중요한 산출물임
    - **2단계 비슷한 기사들 사이에서의 위치** — 장르·길이가 비슷한 기사 중 몇 등인지
-   - **3단계 순위 범위** — 차원별 중요도를 어떻게 배분해도 벗어나지 않는 순위 구간
-7. 아래쪽 **취재원·전문용어·막히는 지점** 목록 확인 후 리포트 내려받기
+   - **3단계 백분위 범위** — 차원별 중요도를 어떻게 배분해도 벗어나지 않는 백분위 구간
+     (2단계와 같은 P○ 표기. 숫자가 클수록 상위)
+7. 아래쪽 **취재원·전문용어·막히는 문장** 목록 확인 후 리포트 내려받기
 
 > 💡 기사 1건의 항목 점수를 확정적으로 쓰려면 **3회 이상 반복 채점** 권장.
 > 1회 채점만으로 같은 점수가 다시 나올 확률은 약 50%임.
@@ -317,24 +319,32 @@ def render_result(r: dict):
     c[1].metric("본문 길이", f"{m.get('body_len', 0):,}자")
     c[2].metric("취재원", f"{r.get('n_sources', 0):g}명")
     c[3].metric("전문용어", f"{r.get('n_terms', 0):g}개")
-    c[4].metric("용어 해설률",
-                "–" if r.get("term_explanation_rate") is None
-                else f"{r['term_explanation_rate']:.0f}%")
-    c[5].metric("막히는 지점", f"{r.get('n_blockers', 0):g}개")
+    c[4].metric("막히는 문장", f"{r.get('n_blockers', 0):g}개")
+    c[5].metric("반복 채점", f"{r.get('n_repeats', 1):g}회")
     st.caption(f"장르 판정 근거: {r.get('genre_reason', '')}")
 
-    c = st.columns(6)
-    for i, (d, label) in enumerate([("A", "A 분석 깊이"), ("C", "C 이해 가능성(설명)"),
+    st.markdown("**4개 차원** — 소속 항목 평균 (0–5)")
+    c = st.columns(4)
+    dim_items = {"A": "A1~A4 평균", "C": "C2·C4·C5 평균", "D": "D1·D2 평균", "B": "B3 단일 항목"}
+    for i, (d, label) in enumerate([("A", "A 분석 깊이"), ("C", "C 이해 가능성"),
                                     ("D", "D 맥락 충실성"), ("B", "B 취재원·투명성")]):
         v = dims.get(d)
         c[i].metric(label, "–" if v is None else f"{v:.2f}",
-                    help=f"{DIM_NAMES.get(d, '')} 차원 평균 (0–5). "
+                    help=f"{DIM_NAMES.get(d, '')} 차원 평균 (0–5) = {dim_items[d]}. "
                          "차원 평균끼리 다시 더하지 말 것.")
-    c[4].metric("C1 이해 난이도", f"{r.get('difficulty', 0):g}",
-                help="⚠ 높을수록 읽기 쉽다는 뜻. 품질 점수가 아님.")
-    c[5].metric("C2 설명 노력",
-                "평가 불가" if r.get("effort_na") else f"{r.get('effort', 0):g}",
-                help="어려운 내용 자체가 없으면 '평가 불가'로 표시됨. 감점이 아님.")
+
+    st.markdown("**차원 밖 단독 지표** — 어느 차원 평균에도 넣지 않음")
+    c = st.columns(4)
+    c[0].metric("C1 이해 난이도", f"{r.get('difficulty', 0):g}",
+                help="0–5. ⚠ 높을수록 읽기 쉽다는 뜻. 품질 점수가 아니어서 C 차원 평균에 넣지 않음.")
+    c[1].metric("C3 용어 해설률",
+                "–" if r.get("term_explanation_rate") is None
+                else f"{r['term_explanation_rate']:.0f}%",
+                help="0–100. 척도가 달라 0–5 항목과 같은 평균에 섞지 않음. 3만 건 평균 13.5%.")
+    st.caption("⚠ C1 이해 난이도와 C3 용어 해설률은 코드가 C로 시작하지만 "
+               "**C 차원 평균에 넣지 않고 단독으로** 읽음 (C 차원 = C2·C4·C5). "
+               "C2 설명 노력은 " + ("**평가 불가** — 어려운 내용 자체가 없음."
+                                    if r.get("effort_na") else f"{r.get('effort', 0):g}점."))
 
     if r.get("effort_na"):
         st.info("이 기사는 **어려운 내용 자체가 없어 '설명 노력'을 평가할 수 없음.** "
@@ -383,7 +393,8 @@ def render_result(r: dict):
         gb.append("G1 제목 과장·왜곡 없음")
     if not r.get("promotional"):
         gb.append("G5 홍보·광고성 아님")
-    gb.append(f"G2 감성 균형 {r.get('sentiment_balance', '–')}/5")
+    gb.append(f"G2 낙관·비관 균형 {r.get('sentiment_balance', '–')}/5 "
+              "(5 = 낙관·비관 양쪽이 고르게 실림 · 0에 가까울수록 어느 한쪽으로만 치우침)")
     if r.get("promotional_type", "해당없음") != "해당없음":
         gb.append(f"홍보 유형: {r['promotional_type']}")
     st.caption(" · ".join(gb))
@@ -399,7 +410,7 @@ def render_result(r: dict):
     st.markdown("### 📊 2단계 — 비슷한 기사들 사이에서의 위치")
     p2 = rpt.layer2(r, m.get("topic", ""))
     if not p2:
-        st.info("비교 기준표 파일이 없어 순위를 산출하지 못함.")
+        st.info("비교 기준표 파일이 없어 백분위를 산출하지 못함.")
     else:
         st.caption(f"비교군 **{p2['cell']}** (n = {p2['n']:,}) · 가중치 개입 없음 · "
                    "본 연구 30,178건 기준")
@@ -418,36 +429,40 @@ def render_result(r: dict):
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
                      column_config={"백분위": st.column_config.ProgressColumn(
                          "비교군 내 백분위", min_value=0, max_value=100, format="P%d")})
-        st.caption("⚠ C1 이해 난이도와 C2 설명 노력은 서로 반대 방향으로 움직이는 값임(r = −0.28). "
+        st.caption("⚠ C1 이해 난이도와 C3 용어 해설률은 위 표에 함께 실리지만 "
+                   "**C 차원 평균에는 넣지 않는 단독 지표**임 (C 차원 = C2·C4·C5).\n\n"
+                   "⚠ C1 이해 난이도와 C2 설명 노력은 서로 반대 방향으로 움직이는 값임(r = −0.28). "
                    "더하지 말고 나란히 놓고 읽을 것.")
 
     # ── Layer 3 ───────────────────────────────────────────
-    st.markdown("### 🎚 3단계 — 가중치를 바꿔도 흔들리지 않는 순위 범위")
+    st.markdown("### 🎚 3단계 — 가중치를 바꿔도 흔들리지 않는 백분위 범위")
     p3 = rpt.layer3(r)
     if not p3:
-        st.info("차원 점수를 산출할 수 없어 순위 범위 계산을 건너뜀.")
+        st.info("차원 점수를 산출할 수 없어 이 단계를 건너뜀.")
     else:
         cc = st.columns([1, 1, 2])
-        cc[0].metric("백분위 평균", f"P{p3['mean']:.0f}")
-        cc[1].metric("95% 구간", f"P{p3['lo']:.0f} – P{p3['hi']:.0f}")
+        cc[0].metric("백분위 (평균)", f"P{p3['mean']:.0f}")
+        cc[1].metric("흔들리는 폭", f"P{p3['lo']:.0f} – P{p3['hi']:.0f}")
         cc[2].caption(
-            f"차원별 중요도 배분을 **{p3['n_draw']:,}가지**로 바꿔 가며 매긴, "
-            f"전체 {p3['n_pop']:,}건 안에서의 순위 범위임. "
+            "**2단계와 같은 백분위 P○로 읽음 — 숫자가 클수록 상위임.** "
+            "다른 점은 비교 상대뿐임. 2단계는 장르·길이가 비슷한 기사끼리, 여기는 **전체 기사**와 견줌.\n\n"
+            f"차원별 중요도 배분을 **{p3['n_draw']:,}가지**로 바꿔 가며 낸, "
+            f"전체 {p3['n_pop']:,}건 대비 백분위임. "
             "고정한 규칙은 A ≥ C ≥ D ≥ B라는 **순서** 하나뿐임 — "
             "전문가 인터뷰에서 합의된 것이 순서뿐이고, 'A 몇 %' 같은 비율은 근거가 없기 때문임. "
-            "**어떤 배분을 쓰더라도 순위가 대체로 이 범위 안에 들어옴.** "
-            "범위가 좁으면 누가 봐도 평가가 비슷한 기사, 넓으면 보는 관점에 따라 갈리는 기사임.")
+            "**어떤 배분을 쓰더라도 백분위가 대체로 이 폭 안에 들어옴.** "
+            "폭이 좁으면 누가 봐도 평가가 비슷한 기사, 넓으면 보는 관점에 따라 갈리는 기사임.")
 
     st.divider()
 
     # ── 추출 산출물 ────────────────────────────────────────
     st.markdown("### 🔍 추출 산출물")
-    t1, t2, t3, t4 = st.tabs(["취재원", "전문용어", "막히는 지점", "원자료(JSON)"])
+    t1, t2, t3, t4 = st.tabs(["취재원", "전문용어", "막히는 문장", "원자료(JSON)"])
 
     with t1:
         srcs = r.get("sources", [])
         if not srcs:
-            st.info("이름·기관이 명시된 취재원이 없음. B 차원 해석에 주의할 것.")
+            st.info("이름·기관이 명시된 취재원이 없음. 이해관계 공시(B3) 해석에 주의할 것.")
         else:
             df = pd.DataFrame([{
                 "문단": s.get("para"), "이름": s.get("name"),
@@ -622,7 +637,7 @@ with tab_ana:
         render_result(ss["result"])
     else:
         st.info("본문을 넣고 **분석 시작**을 누를 것. "
-                "결과는 항목별 진단 → 비슷한 기사 중 위치 → 순위 범위의 순서로 나옴.", icon="👆")
+                "결과는 항목별 진단 → 비슷한 기사 중 위치 → 백분위 범위의 순서로 나옴.", icon="👆")
 
 
 # ══════════════════════════════════════════════════════════
@@ -692,8 +707,9 @@ def build_context(draft: str, attach_result: bool) -> str:
         r = ss["result"]
         dims = rpt.dim_scores(r)
         lines = [f"장르 {r.get('genre')} · 본문 {r['meta'].get('body_len', 0):,}자",
-                 f"차원 평균 — A 분석깊이 {dims['A']} / C 이해가능성 {dims['C']} / "
-                 f"D 맥락충실성 {dims['D']} / B 취재원 {dims['B']}",
+                 f"차원 평균 — A 분석 깊이 {dims['A']} / C 이해 가능성 {dims['C']} / "
+                 f"D 맥락 충실성 {dims['D']} / B 취재원·투명성 {dims['B']}",
+                 "  ※ C 차원 평균 = C2·C4·C5. C1 이해 난이도와 C3 용어 해설률은 차원 밖 단독 지표임",
                  f"C1 이해 난이도 {r.get('difficulty')} (높을수록 쉬움) · "
                  f"C2 설명 노력 {'평가불가' if r.get('effort_na') else r.get('effort')} · "
                  f"C3 용어 해설률 {r.get('term_explanation_rate')}%",

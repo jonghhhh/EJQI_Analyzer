@@ -41,8 +41,10 @@ export const ALL_ITEMS = [...SCORED_ITEMS, ...DERIVED_ITEMS]
 export const DIM_NAMES = { A: "분석 깊이", B: "취재원·투명성",
                            C: "이해 가능성", D: "맥락 충실성" };
 
-// 차원별 항목 — C는 난이도(difficulty)를 제외한다.
-// difficulty는 '쉬움'을 재므로 품질 합성에 넣으면 방향이 뒤집힌다.
+// 차원별 항목 — C 차원은 C2·C4·C5 셋만으로 낸다.
+//   C1 difficulty            '쉬움'을 재므로 품질 합성에 넣으면 방향이 뒤집힌다
+//   C3 term_explanation_rate 척도가 0~100이라 0–5 항목과 같은 평균에 못 넣는다
+// 두 항목은 차원 밖 단독 지표로 따로 보고한다.
 export const DIMS = {
   A: ["numeric_context", "causal_uncertainty", "verification", "impact_scope"],
   B: ["interest_disclosure"],

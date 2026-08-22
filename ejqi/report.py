@@ -137,10 +137,12 @@ def as_text(r: dict) -> str:
          f"제목: {(m.get('title') or '')[:70]}",
          "=" * 74, "",
          "[1단계] 항목별 진단 — 점수 없음, 등급과 근거만", ""]
+    solo = {"difficulty", "term_explanation_rate"}
     c = layer1(r)
     for it in c["items"]:
         L.append(f" {it['mark']} {it['code']:4s} {it['label']:12s} {it['grade']}"
-                 + (f"  ({it['note']})" if it["note"] else ""))
+                 + (f"  ({it['note']})" if it["note"] else "")
+                 + ("   [차원 밖 단독 지표]" if it["key"] in solo else ""))
         if it["evidence"]:
             L.append(f"      근거: {it['evidence'][:70]}")
         if it["reasoning"] and (it["value"] is not None
@@ -150,7 +152,7 @@ def as_text(r: dict) -> str:
         L += ["", f" 미해설 전문용어 ({len(r['unexplained_terms'])}개)",
               "   " + ", ".join(r["unexplained_terms"][:20])]
     if r.get("blockers"):
-        L += ["", f" 비전문가가 막히는 지점 ({len(r['blockers'])}개)"]
+        L += ["", f" 비전문가가 막히는 문장 ({len(r['blockers'])}개)"]
         for b in r["blockers"][:8]:
             L.append(f"   [{b['reason']}] {b['sentence'][:58]}")
             L.append(f"      → {b['note'][:50]}")
@@ -172,15 +174,18 @@ def as_text(r: dict) -> str:
             bar = bar[:pos] + "▲" + bar[pos + 1:]
             L.append(f" {row['code']:4s} {row['label']:12s} {row['shown']:>5s}  "
                      f"P{row['pct']:>3.0f}  |{bar}|")
-        L += ["", "  ※ C1 이해 난이도와 C2 설명노력은 반대 방향의 지표다(r = −0.28).",
+        L += ["", "  ※ C1 이해 난이도와 C3 용어 해설률은 C 차원 평균에 넣지 않는 단독 지표다",
+              "     (C 차원 = C2·C4·C5).",
+              "  ※ C1 이해 난이도와 C2 설명 노력은 반대 방향의 지표다(r = −0.28).",
               "     합산하지 말고 두 값을 나란히 읽을 것."]
 
     p3 = layer3(r)
     if p3:
-        L += ["", f"[3단계] 가중치를 바꿔도 흔들리지 않는 순위 범위 — 서수 제약(A≥C≥D≥B)만 건 {p3['n_draw']:,}개 조합",
-              f"           전체 대비 백분위: 평균 P{p3['mean']:.0f}  "
-              f"95% 구간 [P{p3['lo']:.0f}, P{p3['hi']:.0f}]",
-              "           → 어떤 가중치를 써도 이 구간을 벗어나지 않는다."]
+        L += ["", f"[3단계] 가중치를 바꿔도 흔들리지 않는 백분위 범위 — 서수 제약(A≥C≥D≥B)만 건 {p3['n_draw']:,}개 조합",
+              "           2단계와 같은 백분위 P○ (숫자가 클수록 상위). 비교 상대만 전체 기사로 바뀐다",
+              f"           전체 {p3['n_pop']:,}건 대비: 평균 P{p3['mean']:.0f}  "
+              f"흔들리는 폭 [P{p3['lo']:.0f}, P{p3['hi']:.0f}]",
+              "           → 어떤 가중치를 써도 백분위가 이 폭을 벗어나지 않는다."]
     u = m.get("usage", {})
     L += ["", "-" * 74,
           f"모델 gemini-3.1-flash-lite · 호출 {u.get('calls', 0)}회 · "
