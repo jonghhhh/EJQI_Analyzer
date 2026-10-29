@@ -34,9 +34,9 @@ const SOLO_ITEMS = new Set(["difficulty", "term_explanation_rate"]);
     $("nCells").textContent = "로드 실패";
   }
 
-  // 저장된 키 복원
-  const saved = localStorage.getItem("ejqi_key");
-  if (saved) { $("apikey").value = saved; setKeyState("saved"); }
+  // 키는 저장·복원하지 않음 — 매번 직접 입력. 과거에 저장된 키는 삭제
+  try { localStorage.removeItem("ejqi_key"); } catch {}
+  $("apikey").value = ""; setKeyState("");
 
   // 빠른 질문
   $("quickBox").innerHTML = QUICK.map((q, i) =>
@@ -61,7 +61,7 @@ function bind() {
   $("apikey").addEventListener("input", () => setKeyState(""));
   $("btnPing").addEventListener("click", pingKey);
   $("btnClearKey").addEventListener("click", () => {
-    $("apikey").value = ""; localStorage.removeItem("ejqi_key"); setKeyState("");
+    $("apikey").value = ""; setKeyState("");
   });
 
   $("fBody").addEventListener("input", () => {
@@ -87,17 +87,9 @@ function setKeyState(kind, msg) {
     el.className = "note ok"; el.innerHTML = msg || "키 확인 완료 — 두 기능 모두 사용 가능함.";
   } else if (kind === "bad") {
     el.className = "note err"; el.innerHTML = msg;
-  } else if (kind === "saved" || has) {
+  } else if (has) {
     el.className = "note info";
-    el.innerHTML = '키 입력됨. <b>키 확인</b>을 눌러 정상 작동 여부 점검 가능.'
-      + '<br><label class="small" style="display:flex;gap:5px;align-items:center;margin-top:6px">'
-      + `<input type="checkbox" id="cbSave" style="width:auto" ${localStorage.getItem("ejqi_key") ? "checked" : ""}>`
-      + ' 이 브라우저에 키 저장</label>';
-    const cb = $("cbSave");
-    if (cb) cb.addEventListener("change", () => {
-      if (cb.checked) localStorage.setItem("ejqi_key", $("apikey").value.trim());
-      else localStorage.removeItem("ejqi_key");
-    });
+    el.innerHTML = '키 입력됨. <b>키 확인</b>을 눌러 정상 작동 여부 점검 가능.';
   } else {
     el.className = "note info"; el.textContent = "키를 넣어야 분석·대화 시작 가능함.";
   }
